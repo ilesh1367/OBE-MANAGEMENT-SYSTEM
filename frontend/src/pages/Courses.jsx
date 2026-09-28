@@ -15,7 +15,15 @@ const emptyForm = {
   pso_count: 2,
 };
 
-export default function Courses() {
+export default function Courses({ courseKind = 'THEORY' }) {
+  const isLab = courseKind === 'LAB';
+  const pageTitle = isLab ? 'Lab Courses' : 'Courses';
+  const newLabel = isLab ? '+ New Lab Course' : '+ New Course';
+  const formTitleNew = isLab ? 'New Lab Course' : 'New course';
+  const formTitleEdit = isLab ? 'Edit lab course' : 'Edit course';
+  const createLabel = isLab ? 'Create Lab Course' : 'Create Course';
+  const updateLabel = isLab ? 'Update Lab Course' : 'Update Course';
+
   const { isAdmin } = useAuth();
   const [courses, setCourses] = useState([]);
   const [loginFaculty, setLoginFaculty] = useState([]);
@@ -29,7 +37,7 @@ export default function Courses() {
   const [error, setError] = useState('');
 
   function load() {
-    api.get('/courses/').then((res) => setCourses(res.data.results ?? res.data));
+    api.get(`/courses/?course_kind=${courseKind}`).then((res) => setCourses(res.data.results ?? res.data));
     api.get('/courses/sessions/').then((res) => setSessions(res.data.results ?? res.data)).catch(() => {});
     api.get('/courses/faculty-directory/?active=1').then((res) => setDirectory(res.data.results ?? res.data)).catch(() => {});
     if (isAdmin) {
@@ -37,17 +45,17 @@ export default function Courses() {
     }
   }
 
-  useEffect(load, [isAdmin]);
+  useEffect(load, [isAdmin, courseKind]);
 
   useEffect(() => {
     if (!form.academic_session) {
       setCatalog([]);
       return;
     }
-    api.get(`/courses/catalog/?session=${form.academic_session}`)
+    api.get(`/courses/catalog/?session=${form.academic_session}&kind=${courseKind}`)
       .then((res) => setCatalog(res.data.results ?? res.data))
       .catch(() => setCatalog([]));
-  }, [form.academic_session]);
+  }, [form.academic_session, courseKind]);
 
   const selected = catalog.find((c) => String(c.id) === String(form.catalog_entry));
   const filterSessions = [...new Set(courses.map((c) => c.session_label || c.academic_year).filter(Boolean))];
@@ -93,6 +101,7 @@ export default function Courses() {
     e.preventDefault();
     setError('');
     const payload = {
+      course_kind: courseKind,
       catalog_entry: form.catalog_entry ? Number(form.catalog_entry) : null,
       academic_session: form.academic_session ? Number(form.academic_session) : null,
       teaching_faculty: form.teaching_faculty ? Number(form.teaching_faculty) : null,
@@ -135,7 +144,7 @@ export default function Courses() {
     <div className="p-8 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6 gap-3">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-slate-900">Courses</h1>
+          <h1 className="text-2xl font-bold text-slate-900">{pageTitle}</h1>
           {filterSessions.length > 0 && (
             <select className="border rounded px-2 py-1.5 text-sm" value={sessionFilter} onChange={(e) => setSessionFilter(e.target.value)}>
               <option value="">All sessions</option>
@@ -147,7 +156,7 @@ export default function Courses() {
           onClick={() => { if (showForm) resetForm(); else { setShowForm(true); setEditingId(null); setForm(emptyForm); } }}
           className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded text-sm font-semibold"
         >
-          {showForm ? 'Cancel' : '+ New Course'}
+          {showForm ? 'Cancel' : newLabel}
         </button>
       </div>
 
@@ -155,7 +164,7 @@ export default function Courses() {
         <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-6 mb-6 grid grid-cols-2 gap-4">
           {error && <div className="col-span-2 bg-red-50 text-red-700 text-xs rounded p-2">{error}</div>}
           <p className="col-span-2 text-sm font-semibold text-slate-700">
-            {editingId ? 'Edit course' : 'New course'}
+            {editingId ? formTitleEdit : formTitleNew}
           </p>
           <label className="block text-sm col-span-2">
             <span className="block text-xs font-medium text-slate-600 mb-1">Session</span>
@@ -169,7 +178,7 @@ export default function Courses() {
             <span className="block text-xs font-medium text-slate-600 mb-1">NBA code / subject</span>
             <select className="w-full border rounded px-3 py-2 text-sm" required value={form.catalog_entry}
               onChange={(e) => setForm({ ...form, catalog_entry: e.target.value })}>
-              <option value="">Select NBA subject</option>
+              <option value="">{isLab ? 'Select lab NBA subject' : 'Select NBA subject'}</option>
               {catalog.map((row) => (
                 <option key={row.id} value={row.id}>{row.label}</option>
               ))}
@@ -236,7 +245,7 @@ export default function Courses() {
             </label>
           )}
           <button type="submit" className="col-span-2 bg-slate-900 text-white py-2 rounded text-sm font-semibold">
-            {editingId ? 'Update Course' : 'Create Course'}
+            {editingId ? updateLabel : createLabel}
           </button>
         </form>
       )}
@@ -244,7 +253,11 @@ export default function Courses() {
       {!showForm && error && <div className="bg-red-50 text-red-700 text-xs rounded p-2 mb-4">{error}</div>}
 
       <div className="bg-white shadow rounded-lg divide-y">
-        {visible.length === 0 && <p className="p-6 text-sm text-slate-400">No courses yet — create one above.</p>}
+        {visible.length === 0 && (
+          <p className="p-6 text-sm text-slate-400">
+            {isLab ? 'No lab courses yet — create one above.' : 'No courses yet — create one above.'}
+          </p>
+        )}
         {visible.map((c) => (
           <div key={c.id} className="flex items-center justify-between p-4 hover:bg-slate-50 gap-3">
             <Link to={`/courses/${c.id}`} className="min-w-0 flex-1">

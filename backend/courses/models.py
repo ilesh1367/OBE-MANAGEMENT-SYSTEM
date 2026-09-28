@@ -73,6 +73,20 @@ class FacultyProfile(models.Model):
         return f'{self.full_name} ({self.get_campus_display()})'
 
 
+def is_lab_subject_name(course_name):
+    """True when the catalog/course title looks like a lab subject."""
+    text = (course_name or '').strip()
+    if not text:
+        return False
+    return bool(re.search(r'\bLAB\b', text, re.I))
+
+
+def session_order_key(session):
+    """Chronological order: 2026 Odd → 2026 Even → 2027 Odd → …"""
+    sem = 0 if session.semester_type == AcademicSession.SemesterType.ODD else 1
+    return (session.calendar_year, sem)
+
+
 class NbaSubjectCatalog(models.Model):
     """Admin master: NBA code + subject for one academic session."""
     session = models.ForeignKey(AcademicSession, on_delete=models.CASCADE, related_name='subjects')
@@ -96,6 +110,51 @@ class NbaSubjectCatalog(models.Model):
     def __str__(self):
         return f'{self.nba_code} · {self.course_code} ({self.session})'
 
+    @property
+    def is_lab(self):
+        return is_lab_subject_name(self.course_name)
+
+
+def previous_session_with_subjects(session):
+    """Most recent earlier session that already has NBA catalog rows."""
+    key = session_order_key(session)
+    prior = [
+        s for s in AcademicSession.objects.exclude(pk=session.pk).prefetch_related('subjects')
+        if session_order_key(s) < key and s.subjects.exists()
+    ]
+    if not prior:
+        return None
+    return max(prior, key=session_order_key)
+
+
+def copy_catalog_from_previous(session):
+    """
+    Carry NBA subjects forward into an empty session from the previous one.
+    Returns how many rows were created. No-op if the session already has subjects.
+    """
+    if session.subjects.exists():
+        return 0
+    source = previous_session_with_subjects(session)
+    if not source:
+        return 0
+    created = 0
+    for row in source.subjects.all():
+        _, was_created = NbaSubjectCatalog.objects.get_or_create(
+            session=session,
+            nba_code=row.nba_code,
+            course_code=row.course_code,
+            defaults={
+                'program_name': row.program_name,
+                'course_name': row.course_name,
+                'year_of_study': row.year_of_study,
+                'semester_number': row.semester_number,
+                'credits': row.credits,
+            },
+        )
+        if was_created:
+            created += 1
+    return created
+
 
 class Course(models.Model):
     """One offering of a subject: unique per faculty + session (academic year)."""
@@ -103,12 +162,19 @@ class Course(models.Model):
         ODD = 'ODD', 'Odd'
         EVEN = 'EVEN', 'Even'
 
+    class Kind(models.TextChoices):
+        THEORY = 'THEORY', 'Theory'
+        LAB = 'LAB', 'Lab'
+
     academic_session = models.ForeignKey(
         AcademicSession, on_delete=models.SET_NULL, null=True, blank=True, related_name='offerings',
     )
     catalog_entry = models.ForeignKey(
         NbaSubjectCatalog, on_delete=models.SET_NULL, null=True, blank=True, related_name='offerings',
     )
+    course_kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.THEORY)
+    # Kept in sync with course_kind (DB already had a NOT NULL is_lab column).
+    is_lab = models.BooleanField(default=False)
     course_code = models.CharField(max_length=30)
     course_name = models.CharField(max_length=255)
     program_name = models.CharField(max_length=120, blank=True, help_text='e.g. M.Tech CSE, B.Tech CSE')
@@ -160,6 +226,10 @@ class Course(models.Model):
 
     def __str__(self):
         return f'{self.course_code} — {self.course_name} ({self.session_label})'
+
+    def save(self, *args, **kwargs):
+        self.is_lab = self.course_kind == self.Kind.LAB
+        super().save(*args, **kwargs)
 
     @property
     def session_label(self):

@@ -14,6 +14,7 @@ export default function Navbar() {
         <span className="font-bold text-lg">OBE Management System</span>
         <Link to="/" className="text-sm text-slate-300 hover:text-white">Dashboard</Link>
         <Link to="/courses" className="text-sm text-slate-300 hover:text-white">Courses</Link>
+        <Link to="/lab-courses" className="text-sm text-slate-300 hover:text-white">Lab Courses</Link>
         {user.role === 'ADMIN' && (
           <>
             <Link to="/catalog" className="text-sm text-slate-300 hover:text-white">Catalog</Link>

@@ -63,7 +63,7 @@ export default function CatalogAdmin() {
       const res = await api.post('/courses/sessions/', { calendar_year: Number(newYear), semester_type: newSem });
       await loadSessions();
       setSessionId(String(res.data.id));
-      setStatus(`Session ${res.data.label} saved.`);
+      setStatus(`Session ${res.data.label} saved. NBA subjects carried forward from the previous session when available.`);
     } catch (err) {
       setError(JSON.stringify(err.response?.data || 'Could not create session.'));
     }

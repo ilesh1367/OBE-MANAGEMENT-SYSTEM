@@ -4,6 +4,7 @@ from .access import faculty_owns_course
 from .models import (
     AcademicSession, FacultyProfile, NbaSubjectCatalog,
     Course, CourseOutcome, CoPoMapping, LectureModule, CourseBook,
+    is_lab_subject_name,
 )
 
 
@@ -29,12 +30,13 @@ class FacultyProfileSerializer(serializers.ModelSerializer):
 class NbaSubjectCatalogSerializer(serializers.ModelSerializer):
     session_label = serializers.CharField(source='session.label', read_only=True)
     label = serializers.SerializerMethodField()
+    is_lab = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = NbaSubjectCatalog
         fields = [
             'id', 'session', 'session_label', 'program_name', 'course_code', 'course_name',
-            'year_of_study', 'semester_number', 'nba_code', 'credits', 'label',
+            'year_of_study', 'semester_number', 'nba_code', 'credits', 'label', 'is_lab',
         ]
 
     def get_label(self, obj):
@@ -129,7 +131,7 @@ class CourseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
         fields = [
-            'id', 'academic_session', 'session_label', 'catalog_entry',
+            'id', 'academic_session', 'session_label', 'catalog_entry', 'course_kind', 'is_lab',
             'course_code', 'course_name', 'program_name', 'department', 'nba_code',
             'year_of_study', 'semester_number', 'semester', 'academic_year',
             'credits', 'faculty', 'faculty_name', 'teaching_faculty', 'teaching_faculty_name',
@@ -149,6 +151,7 @@ class CourseSerializer(serializers.ModelSerializer):
             'semester': {'required': False},
             'course_code': {'required': False, 'allow_blank': True},
             'course_name': {'required': False, 'allow_blank': True},
+            'is_lab': {'read_only': True},
         }
         validators = []
 
@@ -165,6 +168,15 @@ class CourseSerializer(serializers.ModelSerializer):
         code = attrs.get('course_code', getattr(self.instance, 'course_code', None))
         name = attrs.get('course_name', getattr(self.instance, 'course_name', None))
         year = attrs.get('academic_year', getattr(self.instance, 'academic_year', None))
+        kind = attrs.get('course_kind', getattr(self.instance, 'course_kind', Course.Kind.THEORY))
+        attrs['is_lab'] = kind == Course.Kind.LAB
+        entry = attrs.get('catalog_entry', getattr(self.instance, 'catalog_entry', None))
+        if entry is not None:
+            entry_is_lab = is_lab_subject_name(entry.course_name)
+            if kind == Course.Kind.LAB and not entry_is_lab:
+                raise serializers.ValidationError('Select a lab NBA subject for a lab course.')
+            if kind == Course.Kind.THEORY and entry_is_lab:
+                raise serializers.ValidationError('Lab subjects belong under Lab Courses, not Courses.')
         if not code or not name:
             raise serializers.ValidationError('Select an NBA subject (or enter course code and name).')
         if not year:

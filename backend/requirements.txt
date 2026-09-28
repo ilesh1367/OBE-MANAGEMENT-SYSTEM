@@ -2,7 +2,7 @@ Django==5.0.6
 djangorestframework==3.15.1
 djangorestframework-simplejwt==5.3.1
 django-cors-headers==4.3.1
-psycopg[binary]          # replaces psycopg2-binary (official modern PostgreSQL adapter)
+psycopg[binary]==3.2.9
 python-decouple==3.8
 dj-database-url==2.2.0
 openpyxl==3.1.5

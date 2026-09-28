@@ -67,10 +67,11 @@ class Student(models.Model):
     roll_number = models.CharField(max_length=30)
     name = models.CharField(max_length=255)
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='students')
+    sort_order = models.PositiveIntegerField(default=0)
 
     class Meta:
         unique_together = ('course', 'roll_number')
-        ordering = ['roll_number']
+        ordering = ['sort_order', 'id']
 
     def __str__(self):
         return f'{self.roll_number} — {self.name}'

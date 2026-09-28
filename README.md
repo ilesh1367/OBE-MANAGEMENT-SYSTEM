@@ -45,6 +45,16 @@ Historical attainment is keyed by **`course_code + academic_year + semester + co
 ### Assessment Tools
 Header fields come from Course Description (programme, year, Odd/Even, course, NBA code, coordinator). Faculty add tools (T-1, T-2, T-3 / mid-sem / end-sem) and questions. Selecting a CO fills the question’s Bloom level from that CO; faculty can override and add remarks. Saved on this offering only.
 
+### Students & Marks
+Shared roster for T1, T2, T3, TA / Project, and CO Feedback. Faculty (and admin on the same page) can:
+
+- Add students one-by-one, paste `enrol, name` lines, or **Upload Excel** (`.xlsx` / `.xls` / `.csv`)
+- Excel roster order is kept as S.No; **Remove** still works on every row
+- Enter marks in the grid, or **Upload Excel** on each exam tab (Enrol No, Name, Q1, Q2, …). Cells stay editable after upload
+- Each exam tab shows that exam’s CO summary; the Attainment sub-tab shows only the overall CO / PO-PSO picture
+
+Roster/marks Excel is parsed in the **frontend** (`xlsx`). Catalog seed Excel still uses backend `openpyxl`.
+
 ### Attainment
 Recalculate from student marks:
 
@@ -54,7 +64,6 @@ Recalculate from student marks:
 - PO/PSO attainment from CO attainment × mapping strength  
 
 ### Also included
-- Students & marks entry per assessment type (including TA / Project)
 - **Assessment Tools** document (question ↔ CO mapping, stored per offering)
 - Dashboard
 - Admin user management  
@@ -70,7 +79,7 @@ obe-part2/
 │   ├── obe_backend/              # settings, URLs, dashboard
 │   ├── users/                    # JWT auth, ADMIN | FACULTY
 │   ├── courses/                  # Course, COs, mapping, modules, books
-│   ├── assessments/              # Assessment, Student, StudentMark
+│   ├── assessments/              # Assessment, Student (sort_order), StudentMark, bulk roster API
 │   ├── attainments/              # CO/PO calculation + HistoricalCoAttainment
 │   ├── opening_reports/          # OpeningReport (OneToOne Course)
 │   └── assessment_tools/         # Assessment Tools document (OneToOne Course)
@@ -95,6 +104,7 @@ obe-part2/
 | Opening report | `/opening-reports/<course_id>/` |
 | Assessment tools | `/assessment-tools/<course_id>/` |
 | Assessments, students, marks | `/assessments/` |
+| Bulk roster import (Excel order) | `POST /assessments/students/bulk/` |
 | CO/PO attainment + calculate | `/attainments/` |
 | Historical CO attainment | `/attainments/historical/?course=&academic_year=` |
 
@@ -111,7 +121,7 @@ python -m venv venv
 venv\Scripts\activate              # macOS/Linux: source venv/bin/activate
 pip install -r requirements.txt
 copy .env.example .env             # set DATABASE_URL, SECRET_KEY
-python manage.py migrate
+python manage.py migrate           # includes student sort_order for Excel roster sequence
 python manage.py createsuperuser   # first Admin
 python manage.py runserver         # http://localhost:8000
 ```
@@ -120,7 +130,7 @@ python manage.py runserver         # http://localhost:8000
 
 ```bash
 cd frontend
-npm install
+npm install                        # includes xlsx for roster/marks Excel upload
 copy .env.example .env             # default: http://localhost:8000/api
 npm run dev                        # http://localhost:5173
 ```
@@ -134,7 +144,7 @@ Sign in at `http://localhost:5173`. Faculty accounts are created by an Admin on 
 3. **Course Description** — fill COs, mapping, syllabus; Save; Print if needed.  
 3. **Opening Report** — confirm synced CD data; set targets; Save; Print.  
 4. **Assessment Tools** — add T-1 / T-2 / T-3 (or mid/end sem) and questions; Save; Print.  
-5. **Students & Marks** — enter assessments.  
+5. **Students & Marks** — roster + marks (manual or **Upload Excel**). Per-exam CO summary is on T1/T2/T3/TA/Feedback; overall tables stay on the Attainment sub-tab.  
 6. **Attainment** — recalculate; check PO/PSO.
 
 Print / Save as PDF uses the browser print dialog (A4). Choose “Save as PDF” as the destination.

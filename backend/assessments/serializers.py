@@ -73,7 +73,8 @@ class AssessmentSerializer(serializers.ModelSerializer):
 class StudentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Student
-        fields = ['id', 'roll_number', 'name', 'course']
+        fields = ['id', 'roll_number', 'name', 'course', 'sort_order']
+        extra_kwargs = {'sort_order': {'required': False}}
 
     def validate_course(self, course):
         request = self.context.get('request')

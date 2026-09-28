@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../api/client';
 import CourseSubnav from '../components/CourseSubnav';
 import SheetPreview from '../components/SheetPreview';
+import { parseMarksFromRows, parseRosterFromRows, readSpreadsheetRows } from '../utils/excelImport';
 import { coursesListLabel, coursesListPath, isLabCourse } from '../utils/offering';
 
 const THEORY_BLOCKS = [
@@ -65,6 +66,87 @@ function BarChart({ title, items, unit = '' }) {
   );
 }
 
+function ExcelUploadButton({ label = 'Upload Excel', disabled, onFile }) {
+  const inputRef = useRef(null);
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".xlsx,.xls,.csv"
+        className="hidden"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (file) await onFile(file);
+        }}
+      />
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => inputRef.current?.click()}
+        className="bg-slate-200 px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-50"
+      >
+        {label}
+      </button>
+    </>
+  );
+}
+
+function ExamCoSummary({ summary, loading }) {
+  const title = summary?.label ? `${summary.label} — CO summary` : 'CO summary';
+  return (
+    <section className="bg-white shadow rounded-lg p-6 overflow-auto">
+      <h3 className="font-semibold mb-1">{title}</h3>
+      {summary && (
+        <p className="text-[11px] text-slate-500 mb-2">
+          Target ≥ {summary.target_percent}% · Total {summary.total_students} · Appeared {summary.appeared}
+          {summary.use_ceiling ? ' · ceiling on' : ''}
+        </p>
+      )}
+      {loading && !summary && <p className="text-sm text-slate-500">Computing CO summary…</p>}
+      {!loading && !summary && (
+        <p className="text-sm text-slate-500">Save marks &amp; calculate to see this exam’s CO attainment.</p>
+      )}
+      {summary && (summary.cos || []).length > 0 && (
+        <table className="w-full text-xs border-collapse max-w-3xl">
+          <thead>
+            <tr className="bg-slate-50">
+              <th className="border p-1"> </th>
+              {summary.cos.map((c) => (
+                <th key={c.co_code} className="border p-1">{c.co_code}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="border p-1">No. scored ≥ target</td>
+              {summary.cos.map((c) => (
+                <td key={c.co_code} className="border p-1 text-center">{c.count_at_target}</td>
+              ))}
+            </tr>
+            <tr>
+              <td className="border p-1">% scored ≥ target</td>
+              {summary.cos.map((c) => (
+                <td key={c.co_code} className="border p-1 text-center">{fmt(c.pct_at_target, 1)}%</td>
+              ))}
+            </tr>
+            <tr>
+              <td className="border p-1">CO attainment level</td>
+              {summary.cos.map((c) => (
+                <td key={c.co_code} className="border p-1 text-center"><LevelBadge level={c.level} /></td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      )}
+      {summary && !(summary.cos || []).length && (
+        <p className="text-sm text-slate-500">No CO rows yet. Map questions to COs, then save marks.</p>
+      )}
+    </section>
+  );
+}
+
 export default function CourseAssessments() {
   const { id } = useParams();
   const [course, setCourse] = useState(null);
@@ -81,6 +163,7 @@ export default function CourseAssessments() {
   const [studentForm, setStudentForm] = useState({ roll_number: '', name: '' });
   const [bulkText, setBulkText] = useState('');
   const [marksGrid, setMarksGrid] = useState({});
+  const [uploading, setUploading] = useState(false);
 
   const outcomes = course?.outcomes ?? [];
   const block = assessments.find((a) => a.assessment_type === tab) || null;
@@ -171,7 +254,8 @@ export default function CourseAssessments() {
   }
 
   useEffect(() => {
-    if (tab === 'attainment' || tab === 'result') loadSheet();
+    const examTab = THEORY_BLOCKS.some((b) => b.key === tab);
+    if (tab === 'attainment' || tab === 'result' || examTab) loadSheet();
   }, [tab, id]);
 
   function patchBlock(fields) {
@@ -198,18 +282,54 @@ export default function CourseAssessments() {
     e.preventDefault();
     setError('');
     const lines = bulkText.split('\n').map((l) => l.trim()).filter(Boolean);
+    const studentsRows = [];
     try {
       for (const line of lines) {
         if (/^roll/i.test(line) || /^enrol/i.test(line)) continue;
         const [roll_number, ...rest] = line.split(/[,\t]/).map((p) => p.trim());
         const name = rest.join(' ').trim();
         if (!roll_number || !name) continue;
-        await api.post('/assessments/students/', { roll_number, name, course: Number(id) });
+        studentsRows.push({ roll_number, name });
       }
+      if (!studentsRows.length) {
+        setError('No valid enrol, name rows to import.');
+        return;
+      }
+      const res = await api.post('/assessments/students/bulk/', {
+        course: Number(id),
+        mode: 'append',
+        students: studentsRows,
+      });
       setBulkText('');
-      await loadAll();
+      setStudents(res.data.students || []);
+      setStatus(`Imported ${res.data.count} students (${res.data.created} new, ${res.data.updated} updated).`);
     } catch (err) {
       setError(formatError(err, 'Could not import students.'));
+    }
+  }
+
+  async function importRosterExcel(file) {
+    setError('');
+    setStatus('');
+    setUploading(true);
+    try {
+      const rows = await readSpreadsheetRows(file);
+      const studentsRows = parseRosterFromRows(rows);
+      if (!studentsRows.length) {
+        setError('Could not find Enrol No and Name columns in that Excel file.');
+        return;
+      }
+      const res = await api.post('/assessments/students/bulk/', {
+        course: Number(id),
+        mode: 'replace_order',
+        students: studentsRows,
+      });
+      setStudents(res.data.students || []);
+      setStatus(`Uploaded ${res.data.count} students from Excel (${res.data.created} new, ${res.data.updated} updated). Remove is still available on every row.`);
+    } catch (err) {
+      setError(formatError(err, 'Could not import roster from Excel.'));
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -242,11 +362,41 @@ export default function CourseAssessments() {
       });
       setStatus('Settings saved.');
       await loadAll();
+      await loadSheet();
     } catch (err) {
       setError(formatError(err, 'Could not save settings.'));
     } finally {
       setSaving(false);
     }
+  }
+
+  async function persistMarks(grid, roster) {
+    if (!block) return;
+    const list = roster || students;
+    const marks = [];
+    for (const student of list) {
+      for (const q of block.questions || []) {
+        if (!q.id) continue;
+        const raw = grid[`${student.id}-${q.id}`];
+        if (raw === undefined || raw === '') continue;
+        const num = Number(raw);
+        if (Number.isNaN(num)) {
+          setError(`Invalid mark for ${student.roll_number} / ${q.label}`);
+          return false;
+        }
+        marks.push({ student: student.id, question: q.id, marks_obtained: num });
+      }
+    }
+    const res = await api.post('/assessments/marks/replace/', { assessment: block.id, marks });
+    if (res.data) {
+      patchBlock({
+        total_students: res.data.total_students,
+        appeared: res.data.appeared,
+      });
+    }
+    setSheet(null);
+    await loadSheet();
+    return marks.length;
   }
 
   async function saveMarks() {
@@ -255,34 +405,57 @@ export default function CourseAssessments() {
     setError('');
     setStatus('');
     try {
-      const marks = [];
-      for (const student of students) {
-        for (const q of block.questions || []) {
-          if (!q.id) continue;
-          const raw = marksGrid[`${student.id}-${q.id}`];
-          if (raw === undefined || raw === '') continue;
-          const num = Number(raw);
-          if (Number.isNaN(num)) {
-            setError(`Invalid mark for ${student.roll_number} / ${q.label}`);
-            setSaving(false);
-            return;
-          }
-          marks.push({ student: student.id, question: q.id, marks_obtained: num });
-        }
-      }
-      const res = await api.post('/assessments/marks/replace/', { assessment: block.id, marks });
-      if (res.data) {
-        patchBlock({
-          total_students: res.data.total_students,
-          appeared: res.data.appeared,
-        });
-      }
-      setStatus(`Saved ${marks.length} marks.`);
-      setSheet(null);
+      const n = await persistMarks(marksGrid, students);
+      if (n === false) return;
+      setStatus(`Saved ${n} marks.`);
     } catch (err) {
       setError(formatError(err, 'Could not save marks.'));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function importMarksExcel(file) {
+    if (!block) return;
+    setError('');
+    setStatus('');
+    setUploading(true);
+    try {
+      const rows = await readSpreadsheetRows(file);
+      const parsed = parseMarksFromRows(rows, block.questions || []);
+      if (!parsed.students.length && !Object.keys(parsed.marksByEnrol).length) {
+        setError('Could not read marks. Use columns Enrol No, Name, then Q1, Q2, Q3, … matching this tab.');
+        return;
+      }
+      let roster = students;
+      if (parsed.students.length) {
+        const res = await api.post('/assessments/students/bulk/', {
+          course: Number(id),
+          mode: 'replace_order',
+          students: parsed.students,
+        });
+        roster = res.data.students || [];
+        setStudents(roster);
+      }
+      const next = { ...marksGrid };
+      let filled = 0;
+      roster.forEach((s) => {
+        const marks = parsed.marksByEnrol[(s.roll_number || '').toLowerCase()];
+        if (!marks) return;
+        (block.questions || []).forEach((q) => {
+          if (!q.id || marks[q.id] == null || marks[q.id] === '') return;
+          next[`${s.id}-${q.id}`] = marks[q.id];
+          filled += 1;
+        });
+      });
+      setMarksGrid(next);
+      const n = await persistMarks(next, roster);
+      if (n === false) return;
+      setStatus(`Uploaded ${filled} marks from Excel. Cells are still editable — change any value and click Save marks & calculate.`);
+    } catch (err) {
+      setError(formatError(err, 'Could not import marks from Excel.'));
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -365,7 +538,10 @@ export default function CourseAssessments() {
           <textarea className="w-full border rounded px-3 py-2 text-sm h-24 mb-2"
             placeholder={'Bulk: enrol, name — one per line\n2403030001, SHANTAM ATTRY'}
             value={bulkText} onChange={(e) => setBulkText(e.target.value)} />
-          <button type="button" onClick={addBulk} className="bg-slate-200 px-3 py-1.5 rounded text-xs font-semibold mb-4">Import roster</button>
+          <div className="flex flex-wrap gap-2 mb-4">
+            <button type="button" onClick={addBulk} className="bg-slate-200 px-3 py-1.5 rounded text-xs font-semibold">Import roster</button>
+            <ExcelUploadButton disabled={uploading} onFile={importRosterExcel} label={uploading ? 'Uploading…' : 'Upload Excel'} />
+          </div>
           <table className="w-full text-sm">
             <thead><tr className="text-left text-slate-500 border-b"><th className="py-2">S.No</th><th>Enrol No</th><th>Name</th><th></th></tr></thead>
             <tbody>
@@ -449,13 +625,24 @@ export default function CourseAssessments() {
             </button>
           </section>
 
+          <ExamCoSummary
+            loading={sheetLoading}
+            summary={(sheet?.exam_summaries || []).find((ex) => ex.type === tab) || null}
+          />
+
           <section className="bg-white shadow rounded-lg p-6 overflow-auto">
-            <div className="flex justify-between items-center mb-3">
+            <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
               <h2 className="font-semibold">Marks — {students.length} students</h2>
-              <button type="button" onClick={saveMarks} disabled={saving || !students.length} className="bg-slate-900 text-white px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50">
-                {saving ? 'Saving…' : 'Save marks & calculate'}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <ExcelUploadButton disabled={uploading || saving} onFile={importMarksExcel} label={uploading ? 'Uploading…' : 'Upload Excel'} />
+                <button type="button" onClick={saveMarks} disabled={saving || !students.length} className="bg-slate-900 text-white px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50">
+                  {saving ? 'Saving…' : 'Save marks & calculate'}
+                </button>
+              </div>
             </div>
+            <p className="text-[11px] text-slate-500 mb-3">
+              Upload Excel with Enrol No, Name, and question columns (Q1, Q2, …). Order follows the sheet. After upload, click any cell to correct a mark.
+            </p>
             {students.length === 0 && <p className="text-sm text-slate-500">Add students on the Roster tab first.</p>}
             {students.length > 0 && (
               <table className="w-full text-xs min-w-[640px] border-collapse">
@@ -552,35 +739,6 @@ export default function CourseAssessments() {
               )}
             </tbody>
           </table>
-
-          {(sheet?.exam_summaries || []).map((ex) => (
-            <div key={ex.type} className="mt-6">
-              <h3 className="font-semibold mb-1">{ex.label} — CO summary</h3>
-              <p className="text-[11px] text-slate-500 mb-2">Target ≥ {ex.target_percent}% · Total {ex.total_students} · Appeared {ex.appeared}{ex.use_ceiling ? ' · ceiling on' : ''}</p>
-              <table className="w-full text-xs border-collapse max-w-3xl">
-                <thead>
-                  <tr className="bg-slate-50">
-                    <th className="border p-1"> </th>
-                    {ex.cos.map((c) => <th key={c.co_code} className="border p-1">{c.co_code}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="border p-1">No. scored ≥ target</td>
-                    {ex.cos.map((c) => <td key={c.co_code} className="border p-1 text-center">{c.count_at_target}</td>)}
-                  </tr>
-                  <tr>
-                    <td className="border p-1">% scored ≥ target</td>
-                    {ex.cos.map((c) => <td key={c.co_code} className="border p-1 text-center">{fmt(c.pct_at_target, 1)}%</td>)}
-                  </tr>
-                  <tr>
-                    <td className="border p-1">CO attainment level</td>
-                    {ex.cos.map((c) => <td key={c.co_code} className="border p-1 text-center"><LevelBadge level={c.level} /></td>)}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          ))}
 
           <h3 className="font-semibold mt-8 mb-2">CO–PO–PSO Mapping</h3>
           <table className="w-full text-xs border-collapse min-w-[640px]">

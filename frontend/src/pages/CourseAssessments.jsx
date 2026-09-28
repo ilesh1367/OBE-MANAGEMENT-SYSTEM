@@ -3,13 +3,23 @@ import { Link, useParams } from 'react-router-dom';
 import api from '../api/client';
 import CourseSubnav from '../components/CourseSubnav';
 import SheetPreview from '../components/SheetPreview';
+import { coursesListLabel, coursesListPath, isLabCourse } from '../utils/offering';
 
-const BLOCKS = [
+const THEORY_BLOCKS = [
   { key: 'T1', label: 'T1' },
   { key: 'T2', label: 'T2' },
   { key: 'T3', label: 'T3' },
   { key: 'TA', label: 'TA / Project' },
   { key: 'FEEDBACK', label: 'CO Feedback' },
+];
+
+/** Lab Students & Marks sub-tabs (structure only for non-roster tabs). */
+const LAB_PLACEHOLDER_TABS = [
+  { id: 'mid_sem', label: 'Mid Sem' },
+  { id: 'end_sem', label: 'End Sem' },
+  { id: 'd2d', label: 'D2D' },
+  { id: 'exit_survey', label: 'Exit Survey' },
+  { id: 'co_attainment', label: 'CO Attainment' },
 ];
 
 function list(data) {
@@ -89,7 +99,12 @@ export default function CourseAssessments() {
       ]);
       setCourse(courseRes.data);
       setStudents(list(studentRes.data));
-      const nextA = list(assessmentRes.data).filter((a) => BLOCKS.some((b) => b.key === a.assessment_type));
+      if (isLabCourse(courseRes.data)) {
+        setAssessments([]);
+        setGrades(list(gradeRes.data));
+        return;
+      }
+      const nextA = list(assessmentRes.data).filter((a) => THEORY_BLOCKS.some((b) => b.key === a.assessment_type));
       const unique = [];
       const seen = new Set();
       for (const a of nextA) {
@@ -97,10 +112,10 @@ export default function CourseAssessments() {
         seen.add(a.assessment_type);
         unique.push(a);
       }
-      if (unique.length < BLOCKS.length) {
+      if (unique.length < THEORY_BLOCKS.length) {
         await api.post('/assessments/ensure/', { course: Number(id) });
         const refreshed = list((await api.get(`/assessments/?course=${id}`)).data)
-          .filter((a) => BLOCKS.some((b) => b.key === a.assessment_type));
+          .filter((a) => THEORY_BLOCKS.some((b) => b.key === a.assessment_type));
         const uniq2 = [];
         const seen2 = new Set();
         for (const a of refreshed) {
@@ -134,6 +149,7 @@ export default function CourseAssessments() {
   }
 
   useEffect(() => {
+    setTab('roster');
     loadAll();
   }, [id]);
 
@@ -270,12 +286,21 @@ export default function CourseAssessments() {
     }
   }
 
-  const tabs = useMemo(() => [
-    { id: 'roster', label: 'Roster' },
-    ...BLOCKS,
-    { id: 'attainment', label: 'Attainment' },
-    { id: 'result', label: 'Result' },
-  ], []);
+  const lab = isLabCourse(course);
+  const tabs = useMemo(() => {
+    if (lab) {
+      return [
+        { id: 'roster', label: 'Roster' },
+        ...LAB_PLACEHOLDER_TABS,
+      ];
+    }
+    return [
+      { id: 'roster', label: 'Roster' },
+      ...THEORY_BLOCKS,
+      { id: 'attainment', label: 'Attainment' },
+      { id: 'result', label: 'Result' },
+    ];
+  }, [lab]);
 
   if (loading && !course) return <div className="p-8">Loading…</div>;
   if (!course) {
@@ -286,12 +311,18 @@ export default function CourseAssessments() {
     );
   }
 
+  const listPath = coursesListPath(course);
+  const listLabel = coursesListLabel(course);
+
   return (
     <div className="p-8 max-w-6xl mx-auto print:p-0 print:max-w-none">
-      <Link to="/courses" className="text-sm text-slate-500 hover:text-slate-700 no-print">← Back to Courses</Link>
+      <Link to={listPath} className="text-sm text-slate-500 hover:text-slate-700 no-print">← Back to {listLabel}</Link>
       <h1 className="text-2xl font-bold text-slate-900 mt-2 mb-1 no-print">{course.course_code} — {course.course_name}</h1>
       <p className="text-sm text-slate-500 mb-4 no-print">
-        {course.session_label || course.academic_year} · one shared student list for T1, T2, T3, TA and Feedback
+        {course.session_label || course.academic_year}
+        {lab
+          ? ' · one shared student list for Mid Sem, End Sem, D2D, Exit Survey and CO Attainment'
+          : ' · one shared student list for T1, T2, T3, TA and Feedback'}
       </p>
       <CourseSubnav courseId={id} />
 
@@ -310,6 +341,15 @@ export default function CourseAssessments() {
           </button>
         ))}
       </div>
+
+      {lab && LAB_PLACEHOLDER_TABS.some((t) => t.id === tab) && (
+        <section className="bg-white shadow rounded-lg p-6">
+          <h2 className="font-semibold mb-1">{LAB_PLACEHOLDER_TABS.find((t) => t.id === tab)?.label}</h2>
+          <p className="text-sm text-slate-500">
+            This lab assessment tab is ready. Detailed fields and mark entry will be added in a follow-up.
+          </p>
+        </section>
+      )}
 
       {tab === 'roster' && (
         <section className="bg-white shadow rounded-lg p-6">
@@ -343,7 +383,7 @@ export default function CourseAssessments() {
         </section>
       )}
 
-      {BLOCKS.some((b) => b.key === tab) && block && (
+      {!lab && THEORY_BLOCKS.some((b) => b.key === tab) && block && (
         <div className="space-y-4">
           <div className="no-print space-y-4">
           <section className="bg-white shadow rounded-lg p-6">
@@ -464,7 +504,7 @@ export default function CourseAssessments() {
         </div>
       )}
 
-      {tab === 'attainment' && (
+      {!lab && tab === 'attainment' && (
         <section className="bg-white shadow rounded-lg p-6 overflow-auto">
           <div className="no-print">
           <div className="flex flex-wrap justify-between gap-2 mb-4">
@@ -609,7 +649,7 @@ export default function CourseAssessments() {
         </section>
       )}
 
-      {tab === 'result' && (
+      {!lab && tab === 'result' && (
         <section className="bg-white shadow rounded-lg p-6 overflow-auto">
           <div className="no-print">
           <div className="flex flex-wrap justify-between gap-2 mb-3">

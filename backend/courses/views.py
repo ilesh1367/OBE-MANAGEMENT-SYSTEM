@@ -3,7 +3,10 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from users.permissions import IsAdminRole
-from .models import AcademicSession, FacultyProfile, NbaSubjectCatalog, Course, CourseOutcome, CoPoMapping
+from .models import (
+    AcademicSession, FacultyProfile, NbaSubjectCatalog, Course, CourseOutcome, CoPoMapping,
+    copy_catalog_from_previous, is_lab_subject_name,
+)
 from .serializers import (
     AcademicSessionSerializer, FacultyProfileSerializer, NbaSubjectCatalogSerializer,
     CourseSerializer, CourseOutcomeSerializer, CoPoMappingSerializer,
@@ -26,6 +29,10 @@ class AcademicSessionViewSet(viewsets.ModelViewSet):
         if self.request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
             return [IsAdminRole()]
         return [permissions.IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        session = serializer.save()
+        copy_catalog_from_previous(session)
 
 
 class FacultyProfileViewSet(viewsets.ModelViewSet):
@@ -62,6 +69,12 @@ class NbaSubjectCatalogViewSet(viewsets.ModelViewSet):
         qs = NbaSubjectCatalog.objects.select_related('session').all()
         session_id = self.request.query_params.get('session')
         if session_id:
+            # Carry subjects forward if this session was created before the feature existed.
+            try:
+                session = AcademicSession.objects.get(pk=session_id)
+                copy_catalog_from_previous(session)
+            except (AcademicSession.DoesNotExist, ValueError, TypeError):
+                pass
             qs = qs.filter(session_id=session_id)
         year = self.request.query_params.get('calendar_year')
         sem = self.request.query_params.get('semester_type')
@@ -72,6 +85,14 @@ class NbaSubjectCatalogViewSet(viewsets.ModelViewSet):
         program = self.request.query_params.get('program')
         if program:
             qs = qs.filter(program_name__icontains=program)
+        kind = (self.request.query_params.get('kind') or '').upper()
+        if kind in ('LAB', 'THEORY'):
+            # Filter in Python — lab detection is name-based (… LAB).
+            lab_ids = [row.id for row in qs if is_lab_subject_name(row.course_name)]
+            if kind == 'LAB':
+                qs = qs.filter(id__in=lab_ids)
+            else:
+                qs = qs.exclude(id__in=lab_ids)
         return qs
 
     @action(detail=True, methods=['get'])
@@ -100,6 +121,9 @@ class CourseViewSet(viewsets.ModelViewSet):
         session_id = self.request.query_params.get('academic_session')
         if session_id:
             qs = qs.filter(academic_session_id=session_id)
+        kind = (self.request.query_params.get('course_kind') or '').upper()
+        if kind in ('LAB', 'THEORY'):
+            qs = qs.filter(course_kind=kind)
         return qs
 
     def perform_create(self, serializer):

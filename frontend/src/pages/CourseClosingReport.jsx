@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import api from '../api/client';
 import CourseSubnav from '../components/CourseSubnav';
 import A4Document from '../components/A4Document';
-import { coordinatorName, teachingFacultyName } from '../utils/offering';
+import { coordinatorName, coursesListLabel, coursesListPath, teachingFacultyName } from '../utils/offering';
 
 const LEVEL_LABELS = {
   REMEMBER: 'Remember Level (Level 1)',
@@ -172,7 +172,7 @@ export default function CourseClosingReport() {
   return (
     <div className="p-8 max-w-6xl mx-auto print:p-0 print:max-w-none">
       <div className="no-print">
-        <Link to="/courses" className="text-sm text-slate-500 hover:text-slate-700">← Back to Courses</Link>
+        <Link to={coursesListPath(course)} className="text-sm text-slate-500 hover:text-slate-700">← Back to {coursesListLabel(course)}</Link>
         <h1 className="text-2xl font-bold text-slate-900 mt-2 mb-1">{course.course_code} — {course.course_name}</h1>
         <p className="text-sm text-slate-500 mb-4">
           Session {course.session_label || ay}

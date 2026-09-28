@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../api/client';
 import CourseSubnav from '../components/CourseSubnav';
-import { coordinatorName, teachingFacultyName } from '../utils/offering';
+import { coordinatorName, coursesListLabel, coursesListPath, teachingFacultyName } from '../utils/offering';
 
 const CO_LEVEL_LABELS = {
   REMEMBER: 'Remember Level (C1)',
@@ -167,7 +167,7 @@ export default function CourseAssessmentTools() {
   return (
     <div className="p-8 max-w-6xl mx-auto print:p-0 print:max-w-none">
       <div className="no-print">
-        <Link to="/courses" className="text-sm text-slate-500 hover:text-slate-700">← Back to Courses</Link>
+        <Link to={coursesListPath(course)} className="text-sm text-slate-500 hover:text-slate-700">← Back to {coursesListLabel(course)}</Link>
         <h1 className="text-2xl font-bold text-slate-900 mt-2 mb-1">{course.course_code} — {course.course_name}</h1>
         <p className="text-sm text-slate-500 mb-4">
           Session {course.session_label || course.academic_year}

@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import api from '../api/client';
 import CourseSubnav from '../components/CourseSubnav';
 import { useAuth } from '../context/AuthContext';
-import { coordinatorName, teachingFacultyName } from '../utils/offering';
+import { coordinatorName, coursesListLabel, coursesListPath, teachingFacultyName } from '../utils/offering';
 
 export default function CourseDetail() {
   const { id } = useParams();
@@ -35,7 +35,7 @@ export default function CourseDetail() {
   async function deleteCourse() {
     if (!window.confirm(`Delete ${course.course_code}? All students, marks, and mapping will be removed.`)) return;
     await api.delete(`/courses/${id}/`);
-    window.location.href = '/courses';
+    window.location.href = coursesListPath(course);
   }
 
   async function recalculate() {
@@ -49,7 +49,7 @@ export default function CourseDetail() {
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
-      <Link to="/courses" className="text-sm text-slate-500 hover:text-slate-700">← Back to Courses</Link>
+      <Link to={coursesListPath(course)} className="text-sm text-slate-500 hover:text-slate-700">← Back to {coursesListLabel(course)}</Link>
       <div className="flex flex-wrap items-start justify-between gap-3 mt-2 mb-1">
         <h1 className="text-2xl font-bold text-slate-900">{course.course_code} — {course.course_name}</h1>
         <button type="button" onClick={deleteCourse} className="text-xs font-semibold text-red-700 bg-red-50 px-3 py-1.5 rounded">

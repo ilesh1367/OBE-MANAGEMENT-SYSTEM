@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../api/client';
 import CourseSubnav from '../components/CourseSubnav';
+import { useAuth } from '../context/AuthContext';
 import { coordinatorName, coursesListLabel, coursesListPath, teachingFacultyName } from '../utils/offering';
 
 const LEVELS = ['REMEMBER', 'UNDERSTAND', 'APPLY', 'ANALYZE', 'EVALUATE', 'CREATE'];
@@ -50,7 +51,9 @@ function mappingFor(co, poKey) {
 
 export default function CourseDescription() {
   const { id } = useParams();
+  const { isAdmin } = useAuth();
   const [course, setCourse] = useState(null);
+  const [facultyList, setFacultyList] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [modules, setModules] = useState([]);
   const [textBooks, setTextBooks] = useState(['']);
@@ -98,6 +101,23 @@ export default function CourseDescription() {
   useEffect(() => {
     load().catch(() => setError('Failed to load course description.'));
   }, [id]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      api.get('/auth/users/?role=FACULTY').then((res) => setFacultyList(res.data.results ?? res.data));
+    }
+  }, [isAdmin]);
+
+  async function assignFaculty(facultyId) {
+    await api.patch(`/courses/${id}/`, { faculty: facultyId === '' ? null : Number(facultyId) });
+    await load();
+  }
+
+  async function deleteCourse() {
+    if (!window.confirm(`Delete ${course.course_code}? All students, marks, and mapping will be removed.`)) return;
+    await api.delete(`/courses/${id}/`);
+    window.location.href = coursesListPath(course);
+  }
 
   const evalTotal = Number(form.t1_marks || 0) + Number(form.t2_marks || 0)
     + Number(form.end_sem_marks || 0) + Number(form.ta_marks || 0);
@@ -219,7 +239,12 @@ export default function CourseDescription() {
     <div className="p-8 max-w-6xl mx-auto print:p-0 print:max-w-none">
       <div className="no-print">
         <Link to={coursesListPath(course)} className="text-sm text-slate-500 hover:text-slate-700">← Back to {coursesListLabel(course)}</Link>
-        <h1 className="text-2xl font-bold text-slate-900 mt-2 mb-1">{course.course_code} — {course.course_name}</h1>
+        <div className="flex flex-wrap items-start justify-between gap-3 mt-2 mb-1">
+          <h1 className="text-2xl font-bold text-slate-900">{course.course_code} — {course.course_name}</h1>
+          <button type="button" onClick={deleteCourse} className="text-xs font-semibold text-red-700 bg-red-50 px-3 py-1.5 rounded">
+            Delete course
+          </button>
+        </div>
         <p className="text-sm text-slate-500 mb-4">
           Session {course.session_label || course.academic_year}
           {` · Faculty: ${teachingFacultyName(course)} · Coordinator: ${coordinatorName(course)}`}
@@ -228,6 +253,24 @@ export default function CourseDescription() {
 
         {error && <div className="bg-red-50 text-red-700 text-sm rounded p-3 mb-4">{error}</div>}
         {status && <div className="bg-emerald-50 text-emerald-800 text-sm rounded p-3 mb-4">{status}</div>}
+
+        <div className="bg-white shadow rounded-lg p-4 mb-4 flex flex-wrap items-center gap-3">
+          <span className="text-sm text-slate-600">Assigned faculty login:</span>
+          {isAdmin ? (
+            <select
+              className="border rounded px-2 py-1.5 text-sm"
+              value={course.faculty ?? ''}
+              onChange={(e) => assignFaculty(e.target.value)}
+            >
+              <option value="">Unassigned</option>
+              {facultyList.map((f) => (
+                <option key={f.id} value={f.id}>{f.first_name} {f.last_name} (@{f.username})</option>
+              ))}
+            </select>
+          ) : (
+            <span className="text-sm font-medium text-slate-900">{course.faculty_name || 'Unassigned'}</span>
+          )}
+        </div>
 
         <div className="flex flex-wrap gap-2 justify-end mb-4">
           <button type="button" onClick={() => window.print()} className="bg-slate-200 px-4 py-2 rounded text-sm font-semibold">

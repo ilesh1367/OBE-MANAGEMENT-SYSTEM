@@ -260,7 +260,7 @@ export default function Courses({ courseKind = 'THEORY' }) {
         )}
         {visible.map((c) => (
           <div key={c.id} className="flex items-center justify-between p-4 hover:bg-slate-50 gap-3">
-            <Link to={`/courses/${c.id}`} className="min-w-0 flex-1">
+            <Link to={`/courses/${c.id}/description`} className="min-w-0 flex-1">
               <p className="font-semibold text-slate-900">{c.course_code} — {c.course_name}</p>
               <p className="text-xs text-slate-500">
                 {c.program_name ? `${c.program_name} · ` : ''}{c.session_label || c.academic_year}

@@ -1,12 +1,11 @@
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import ProtectedRoute, { GuestRoute } from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import Courses from './pages/Courses';
-import CourseDetail from './pages/CourseDetail';
 import CourseDescription from './pages/CourseDescription';
 import CourseOpeningReport from './pages/CourseOpeningReport';
 import CourseAssessments from './pages/CourseAssessments';
@@ -14,6 +13,11 @@ import CourseAssessmentTools from './pages/CourseAssessmentTools';
 import CourseClosingReport from './pages/CourseClosingReport';
 import Users from './pages/Users';
 import CatalogAdmin from './pages/CatalogAdmin';
+
+function CourseHomeRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/courses/${id}/description`} replace />;
+}
 
 export default function App() {
   return (
@@ -27,7 +31,7 @@ export default function App() {
         <Route path="/catalog" element={<ProtectedRoute adminOnly><CatalogAdmin /></ProtectedRoute>} />
         <Route path="/courses" element={<ProtectedRoute><Courses courseKind="THEORY" /></ProtectedRoute>} />
         <Route path="/lab-courses" element={<ProtectedRoute><Courses courseKind="LAB" /></ProtectedRoute>} />
-        <Route path="/courses/:id" element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
+        <Route path="/courses/:id" element={<ProtectedRoute><CourseHomeRedirect /></ProtectedRoute>} />
         <Route path="/courses/:id/description" element={<ProtectedRoute><CourseDescription /></ProtectedRoute>} />
         <Route path="/courses/:id/opening-report" element={<ProtectedRoute><CourseOpeningReport /></ProtectedRoute>} />
         <Route path="/courses/:id/assessments" element={<ProtectedRoute><CourseAssessments /></ProtectedRoute>} />

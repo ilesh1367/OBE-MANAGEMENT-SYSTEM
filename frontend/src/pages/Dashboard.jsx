@@ -96,7 +96,7 @@ export default function Dashboard() {
               {(data?.courses ?? []).map((c) => (
                 <tr key={c.id} className="border-b last:border-0 hover:bg-slate-50">
                   <td className="px-6 py-3">
-                    <Link to={`/courses/${c.id}`} className="font-semibold text-slate-900 hover:underline">
+                    <Link to={`/courses/${c.id}/description`} className="font-semibold text-slate-900 hover:underline">
                       {c.course_code}
                     </Link>
                     <p className="text-xs text-slate-500">{c.course_name}</p>

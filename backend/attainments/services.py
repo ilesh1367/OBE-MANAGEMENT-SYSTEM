@@ -291,7 +291,7 @@ def build_sheet(course):
             blocks[a.assessment_type] = a
     questions_by_a = {a.id: list(a.questions.all()) for a in blocks.values()}
     outcomes = list(course.outcomes.all().order_by('order', 'id'))
-    students = list(course.students.all().order_by('roll_number'))
+    students = list(course.students.all())
     roster_n = len(students)
     po_keys = course.po_pso_keys()
     marks_idx = _marks_index(course.id)

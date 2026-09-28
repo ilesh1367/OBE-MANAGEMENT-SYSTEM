@@ -21,13 +21,6 @@ export default function CourseSubnav({ courseId }) {
         Opening Report
       </NavLink>
       <NavLink
-        to={`/courses/${courseId}`}
-        end
-        className={({ isActive }) => `${link} ${isActive ? active : idle}`}
-      >
-        Attainment
-      </NavLink>
-      <NavLink
         to={`/courses/${courseId}/assessments`}
         className={({ isActive }) => `${link} ${isActive ? active : idle}`}
       >

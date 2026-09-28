@@ -51,12 +51,11 @@ Shared roster for T1, T2, T3, TA / Project, and CO Feedback. Faculty (and admin 
 - Add students one-by-one, paste `enrol, name` lines, or **Upload Excel** (`.xlsx` / `.xls` / `.csv`)
 - Excel roster order is kept as S.No; **Remove** still works on every row
 - Enter marks in the grid, or **Upload Excel** on each exam tab (Enrol No, Name, Q1, Q2, …). Cells stay editable after upload
-- Each exam tab shows that exam’s CO summary; the Attainment sub-tab shows only the overall CO / PO-PSO picture
+- Each exam tab shows that exam’s CO summary; the **Attainment** sub-tab under Students & Marks is the overall CO / PO-PSO picture (Direct, Indirect, Final, charts)
 
 Roster/marks Excel is parsed in the **frontend** (`xlsx`). Catalog seed Excel still uses backend `openpyxl`.
 
-### Attainment
-Recalculate from student marks:
+CO/PO formulas (on that Attainment sub-tab):
 
 - Direct = 60% tests (T1/T2/T3) + 20% assignment  
 - Indirect = 20% course-exit feedback  
@@ -142,10 +141,9 @@ Sign in at `http://localhost:5173`. Faculty accounts are created by an Admin on 
 1. **Admin → Catalog** — add session (e.g. 2026 Odd), NBA subjects, faculty (Sector-62 / 128). Seed Excel with `python manage.py seed_catalog`.  
 2. **Courses** — pick session, NBA subject (program/code/name auto-fill), faculty name, course coordinator; Save.  
 3. **Course Description** — fill COs, mapping, syllabus; Save; Print if needed.  
-3. **Opening Report** — confirm synced CD data; set targets; Save; Print.  
-4. **Assessment Tools** — add T-1 / T-2 / T-3 (or mid/end sem) and questions; Save; Print.  
-5. **Students & Marks** — roster + marks (manual or **Upload Excel**). Per-exam CO summary is on T1/T2/T3/TA/Feedback; overall tables stay on the Attainment sub-tab.  
-6. **Attainment** — recalculate; check PO/PSO.
+4. **Opening Report** — confirm synced CD data; set targets; Save; Print.  
+5. **Assessment Tools** — add T-1 / T-2 / T-3 (or mid/end sem) and questions; Save; Print.  
+6. **Students & Marks** — roster + marks (manual or **Upload Excel**). Per-exam CO summary is on T1/T2/T3/TA/Feedback; overall CO/PO-PSO is the Attainment sub-tab. Recalculate there.
 
 Print / Save as PDF uses the browser print dialog (A4). Choose “Save as PDF” as the destination.
 

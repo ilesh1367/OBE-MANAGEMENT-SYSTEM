@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import api from '../api/client';
 import CourseSubnav from '../components/CourseSubnav';
 import SheetPreview from '../components/SheetPreview';
-import { parseMarksFromRows, parseRosterFromRows, readSpreadsheetRows } from '../utils/excelImport';
+import { parseExamMetaFromRows, parseMarksFromRows, parseRosterFromRows, readSpreadsheetRows } from '../utils/excelImport';
 import { coursesListLabel, coursesListPath, isLabCourse } from '../utils/offering';
 
 const THEORY_BLOCKS = [
@@ -313,7 +313,7 @@ export default function CourseAssessments() {
     setStatus('');
     setUploading(true);
     try {
-      const rows = await readSpreadsheetRows(file);
+      const rows = await readSpreadsheetRows(file, { tab: 'roster' });
       const studentsRows = parseRosterFromRows(rows);
       if (!studentsRows.length) {
         setError('Could not find Enrol No and Name columns in that Excel file.');
@@ -421,8 +421,9 @@ export default function CourseAssessments() {
     setStatus('');
     setUploading(true);
     try {
-      const rows = await readSpreadsheetRows(file);
+      const rows = await readSpreadsheetRows(file, { tab });
       const parsed = parseMarksFromRows(rows, block.questions || []);
+      const meta = parseExamMetaFromRows(rows);
       if (!parsed.students.length && !Object.keys(parsed.marksByEnrol).length) {
         setError('Could not read marks. Use columns Enrol No, Name, then Q1, Q2, Q3, … matching this tab.');
         return;
@@ -451,6 +452,21 @@ export default function CourseAssessments() {
       setMarksGrid(next);
       const n = await persistMarks(next, roster);
       if (n === false) return;
+      const settings = {};
+      if (meta.target_percent != null) settings.target_percent = meta.target_percent;
+      if (meta.total_students != null) settings.total_students = meta.total_students;
+      if (meta.appeared != null) settings.appeared = meta.appeared;
+      if (Object.keys(settings).length) {
+        patchBlock(settings);
+        await api.patch(`/assessments/${block.id}/`, {
+          exam_label: block.exam_label,
+          target_percent: settings.target_percent ?? block.target_percent,
+          total_students: settings.total_students ?? block.total_students,
+          appeared: settings.appeared ?? block.appeared,
+          use_ceiling: !!block.use_ceiling,
+        });
+        await loadSheet();
+      }
       setStatus(`Uploaded ${filled} marks from Excel. Cells are still editable — change any value and click Save marks & calculate.`);
     } catch (err) {
       setError(formatError(err, 'Could not import marks from Excel.'));

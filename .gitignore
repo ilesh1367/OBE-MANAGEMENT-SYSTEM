@@ -6,3 +6,8 @@ frontend/node_modules/
 frontend/dist/
 frontend/.env
 .DS_Store
+
+# Student/faculty attainment workbooks (do not commit marks data)
+data/*Attainment*.xlsx
+data/*attainment*.xlsx
+
